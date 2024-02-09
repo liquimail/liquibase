@@ -59,6 +59,7 @@ public class LoadDataChange extends AbstractTableChange implements ChangeWithCol
      */
     public static final String DEFAULT_COMMENT_PATTERN = "#";
     public static final Pattern BASE64_PATTERN = Pattern.compile("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$");
+    public static final Pattern FILE_PATTERN = Pattern.compile("^(.+)\\/([^\\/]+)");
     private static final Logger LOG = Scope.getCurrentScope().getLog(LoadDataChange.class);
     private static final ResourceBundle coreBundle = getBundle("liquibase/i18n/liquibase-core");
     private String file;
@@ -386,20 +387,33 @@ public class LoadDataChange extends AbstractTableChange implements ChangeWithCol
                                     new liquibase.statement.SequenceNextValueFunction(getSchemaName(), value);
                             valueConfig.setValueComputed(function);
 
-                        } else if (columnConfig.getType().equalsIgnoreCase(LOAD_DATA_TYPE.BLOB.toString())) {
+                        } else if (columnConfig.getType().equalsIgnoreCase(LOAD_DATA_TYPE.BLOB.toString()) ||
+                                columnConfig.getType().equalsIgnoreCase(LOAD_DATA_TYPE.BYTEA.toString())) {
                             if ("NULL".equalsIgnoreCase(value)) {
                                 valueConfig.setValue(null);
                             } else if (BASE64_PATTERN.matcher(value).matches()) {
                                 valueConfig.setType(columnConfig.getType());
                                 valueConfig.setValue(value);
                                 needsPreparedStatement = true;
-                            } else {
+                            } else if (FILE_PATTERN.matcher(value).matches()) {
                                 valueConfig.setValueBlobFile(value);
+                                needsPreparedStatement = true;
+                            } else {
+                                valueConfig.setType(columnConfig.getType());
+                                valueConfig.setValue(value);
                                 needsPreparedStatement = true;
                             }
                         } else if (columnConfig.getTypeEnum() == LOAD_DATA_TYPE.CLOB) {
-                            valueConfig.setValueClobFile(value);
-                            needsPreparedStatement = true;
+                            if (value == null) {
+                                valueConfig.setValue(null);
+                            } else if (value.startsWith(this.quotchar) && value.endsWith(this.quotchar)) {
+                                valueConfig.setType(columnConfig.getType());
+                                value = value.substring(1, value.length() - 1);
+                                valueConfig.setValue(value);
+                            } else {
+                                valueConfig.setValueClobFile(value);
+                                needsPreparedStatement = true;
+                            }
                         } else if (columnConfig.getTypeEnum() == LOAD_DATA_TYPE.UUID) {
                             valueConfig.setType(columnConfig.getType());
                             if ("NULL".equalsIgnoreCase(value)) {
@@ -895,7 +909,7 @@ public class LoadDataChange extends AbstractTableChange implements ChangeWithCol
 
     @SuppressWarnings("HardCodedStringLiteral")
     public enum LOAD_DATA_TYPE {
-        BOOLEAN, NUMERIC, DATE, STRING, COMPUTED, SEQUENCE, BLOB, CLOB, SKIP, UUID, OTHER, UNKNOWN
+        BOOLEAN, NUMERIC, DATE, STRING, COMPUTED, SEQUENCE, BLOB, BYTEA, CLOB, SKIP, UUID, OTHER, UNKNOWN
     }
 
     protected static class LoadDataRowConfig {

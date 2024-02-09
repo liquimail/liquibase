@@ -242,6 +242,12 @@ public abstract class ExecutablePreparedStatementBase implements ExecutablePrepa
                 stmt.setObject(i, col.getValue(), Types.OTHER);
             } else if (LoadDataChange.LOAD_DATA_TYPE.BLOB.name().equalsIgnoreCase(col.getType())) {
                 stmt.setBlob(i, new ByteArrayInputStream(Base64.getDecoder().decode(col.getValue())));
+            }  else if (LoadDataChange.LOAD_DATA_TYPE.BYTEA.name().equalsIgnoreCase(col.getType())) {
+                if (LoadDataChange.BASE64_PATTERN.matcher(col.getValue()).matches()) {
+                    stmt.setBinaryStream(i, new ByteArrayInputStream(Base64.getDecoder().decode(col.getValue())));
+                } else {
+                    stmt.setBinaryStream(i, new ByteArrayInputStream(col.getValue().getBytes()));
+                }
             } else if (LoadDataChange.LOAD_DATA_TYPE.CLOB.name().equalsIgnoreCase(col.getType())) {
                 try {
                     if (database instanceof PostgresDatabase || database instanceof SQLiteDatabase) {
